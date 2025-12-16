@@ -24,7 +24,12 @@ async def midi_server(websocket):
                 events = midi_input.read(10)
                 for event in events:
                     data, timestamp = event
-                    await websocket.send(bytes(data))
+                    status = data[0] & 0xF0
+                    if status == 0xC0 or status == 0xD0:
+                        # I have to do this because I get two extra zeros, i get this is to compensate but it breaks program changes if i stream the midi messages again
+                        await websocket.send(bytes(data[:2]))
+                    else:
+                        await websocket.send(bytes(data))
     except websockets.ConnectionClosed:
         print("Client disconnected")
     finally:
