@@ -164,6 +164,10 @@ midi.INSTRUMENT_NAMES = {
 
 ---------------------------
 
+function midi.find(name)
+    return midi.devices[name]
+end
+
 ---Creates a new MIDI stream
 ---
 ---If name is nil, it will not be added to the device list
