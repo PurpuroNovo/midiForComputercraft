@@ -11,6 +11,8 @@ midi.PROGRAM_CHANGE          = 0xC0
 midi.CHANNEL_PRESSURE        = 0xD0
 midi.PITCH_BEND_CHANGE       = 0xE0
 
+midi.CC_VOLUME        = 7
+
 midi.DATA_BYTES = {
     [midi.NOTE_OFF]                = 2,
     [midi.NOTE_ON]                 = 2,

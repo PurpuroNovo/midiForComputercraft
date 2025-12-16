@@ -3,6 +3,9 @@ if not midi then require("midi") end
 local speaker = peripheral.find("speaker")
 local device = midi.create("Noteblock MIDI Synth")
 
+-- Settings
+local SUPPORTS_PITCH_BENDING = false
+
 -- Idea: best of both worlds
 -- Since noteblocks cant reach all notes due to computercraft limiting us, i can choose in other ranges
 -- Some instruments overlap in range, if they overlap, you could choose a bias, example: for Xylophones, if you find yourself in bell range, always pick bell, if not, pick something else
@@ -100,22 +103,22 @@ local instrumentBias = {
     [40] = {"bass", "didgeridoo", "guitar", "banjo"}, -- Synth Bass 2
 
     -- Strings
-    [41] = {"harp", "pling"}, -- Violin
-    [42] = {"harp", "pling"}, -- Viola
-    [43] = {"harp", "pling"}, -- Cello
-    [44] = {"harp", "pling"}, -- Contrabass
-    [45] = {"harp", "pling"}, -- Tremolo Strings
-    [46] = {"harp", "pling"}, -- Pizzicato Strings
-    [47] = {"harp"},          -- Orchestral Harp
-    [48] = {"harp"},          -- Timpani
-    [49] = {"harp", "pling"}, -- String Ensemble 1
-    [50] = {"harp", "pling"}, -- String Ensemble 2
-    [51] = {"harp", "pling"}, -- Synth Strings 1
-    [52] = {"harp", "pling"}, -- Synth Strings 2
-    [53] = {"harp", "pling"}, -- Choir Aahs
-    [54] = {"harp", "pling"}, -- Voice Oohs
-    [55] = {"harp", "pling"}, -- Synth Voice
-    [56] = {"harp", "pling"}, -- Orchestra Hit
+    [41] = {"harp", "pling"},      -- Violin
+    [42] = {"harp", "pling"},      -- Viola
+    [43] = {"harp", "pling"},      -- Cello
+    [44] = {"harp", "pling"},      -- Contrabass
+    [45] = {"harp", "pling"},      -- Tremolo Strings
+    [46] = {"harp", "pling"},      -- Pizzicato Strings
+    [47] = {"harp"},               -- Orchestral Harp
+    [48] = {"bass", "didgeridoo"}, -- Timpani
+    [49] = {"harp", "pling"},      -- String Ensemble 1
+    [50] = {"harp", "pling"},      -- String Ensemble 2
+    [51] = {"harp", "pling"},      -- Synth Strings 1
+    [52] = {"harp", "pling"},      -- Synth Strings 2
+    [53] = {"harp", "pling"},      -- Choir Aahs
+    [54] = {"harp", "pling"},      -- Voice Oohs
+    [55] = {"harp", "pling"},      -- Synth Voice
+    [56] = {"harp", "pling"},      -- Orchestra Hit
 
     -- Brass
     [57] = {"bit", "harp"}, -- Trumpet
@@ -220,9 +223,13 @@ local drumList = {
 }
 
 local channelInstruments = {}
+local channelVolumes = {}
+local channelPitches = {}
 
 for i = 1, 16 do
     channelInstruments[i] = 1
+    channelVolumes[i] = 1.0
+    channelPitches[i] = 0.0
 end
 
 device:listen(function (data)
@@ -231,22 +238,41 @@ device:listen(function (data)
     local note = data[2]
     local velocity = data[3]
 
+    if status == midi.CONTROL_CHANGE then
+        local control = data[2]
+
+        if control == midi.CC_VOLUME then
+            channelVolumes[channel] = data[3]/127
+        end
+    end
+
+    if status == midi.PITCH_BEND_CHANGE then
+        local lsb = data[2]
+        local msb = data[3]
+        local value = msb * 128 + lsb  -- 0..16383
+        channelPitches[channel] = (value - 8192) / 682 -- 682 = 1 semitone
+    end
+
     if status == midi.PROGRAM_CHANGE then
         local instrument = data[2] + 1
         channelInstruments[channel] = instrument
     end
 
     if status == midi.NOTE_ON then
+        local volume = (velocity/127) * channelVolumes[channel]
+        local pitch = note
+        if SUPPORTS_PITCH_BENDING then pitch = pitch + channelPitches[channel] end
+
         if channel == 10 then
             -- Drum channel, handle drums
             local instrument = drumList[note]
             if instrument then
-                speaker.playNote(instrument, velocity/127)
+                speaker.playNote(instrument, volume)
             end
         else
             -- Instrument channels
             if soundEffects[channelInstruments[channel]] then
-                speaker.playSound(soundEffects[channelInstruments[channel]], velocity/127)
+                speaker.playSound(soundEffects[channelInstruments[channel]], volume)
             else
                 local candidates = {}
                 local bias = instrumentBias[channelInstruments[channel]]
@@ -257,7 +283,7 @@ device:listen(function (data)
                 end
 
                 for instrument, root in pairs(instrumentRoots) do
-                    local offset = note - root
+                    local offset = pitch - root
                     if offset >= 0 and offset <= 24 then
                         table.insert(candidates, {instrument, offset})
                     end
@@ -270,7 +296,7 @@ device:listen(function (data)
                 end)
 
                 if candidates[1] then
-                    speaker.playNote(candidates[1][1], velocity/127, candidates[1][2])
+                    speaker.playNote(candidates[1][1], volume, candidates[1][2])
                 end
             end
         end
