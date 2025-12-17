@@ -1,7 +1,7 @@
 if not midi then require("midi") end
 
 local speaker = peripheral.find("speaker")
-local device = midi.create("Noteblock MIDI Synth")
+local device = midi.create("Noteblock MIDI Synth", "output")
 
 -- Settings
 local SUPPORTS_PITCH_BENDING = false
