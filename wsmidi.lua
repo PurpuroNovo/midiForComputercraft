@@ -1,4 +1,4 @@
-require("synth")
+if not midi then require("midi") end
 
 local device = midi.find("Noteblock MIDI Synth")
 local server = arg[1] or "ws://localhost:8765"

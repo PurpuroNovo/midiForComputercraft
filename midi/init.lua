@@ -208,3 +208,5 @@ function midi.toString(data)
 
     return "Unknown Data"
 end
+
+require("midi.synth")

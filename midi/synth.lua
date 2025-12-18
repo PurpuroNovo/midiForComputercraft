@@ -1,34 +1,44 @@
-if not midi then require("midi") end
-
-local speaker = peripheral.find("speaker")
+if midi.find("Noteblock MIDI Synth", "output") then return end -- Don't make a new instance if one already exists
 local device = midi.create("Noteblock MIDI Synth", "output")
 
--- Settings
-local SUPPORTS_PITCH_BENDING = false
-
--- Idea: best of both worlds
--- Since noteblocks cant reach all notes due to computercraft limiting us, i can choose in other ranges
+-- The best of both worlds: Having instruments and having range
+-- Since noteblocks can't reach all notes due to computercraft limiting us, I can choose instruments in other ranges
 -- Some instruments overlap in range, if they overlap, you could choose a bias, example: for Xylophones, if you find yourself in bell range, always pick bell, if not, pick something else
+-- The noteblock pitches span from 0 to 24, meaning +2 octaves up from the root
 
--- the noteblock pitches span from 0 to 24
--- also, the pitches arent integers, they support half steps
+---@alias NoteblockInstrument
+--- |"harp"
+--- |"bass"
+--- |"didgeridoo"
+--- |"guitar"
+--- |"pling"
+--- |"banjo"
+--- |"bell"
+--- |"flute"
+--- |"chime"
+--- |"bit"
+--- |"xylophone"
+--- |"iron_xylophone"
+--- |"cow_bell"
 
+---@type { [NoteblockInstrument]: integer }
 local instrumentRoots = {
-    bass           = 18, -- F#1
-    bell           = 66, -- F#5
-    flute          = 54, -- F#4
-    chime          = 66, -- F#5
-    guitar         = 30, -- F#2
-    xylophone      = 66, -- F#5
-    iron_xylophone = 42, -- F#3
-    cow_bell       = 54, -- F#4
-    didgeridoo     = 18, -- F#1
-    bit            = 42, -- F#3
-    banjo          = 42, -- F#3
-    pling          = 42, -- F#3
-    harp           = 42, -- F#3
+    bass           = 18, -- F#1, String Bass
+    bell           = 66, -- F#5, Glockenspiel
+    flute          = 54, -- F#4, Flute
+    chime          = 66, -- F#5, Chime
+    guitar         = 30, -- F#2, Steel Guitar
+    xylophone      = 66, -- F#5, Xylophone
+    iron_xylophone = 42, -- F#3, Iron Xylophone (Vibraphone)
+    cow_bell       = 54, -- F#4, Cow Bell
+    didgeridoo     = 18, -- F#1, Didgeridoo
+    bit            = 42, -- F#3, Bit (Synthesizer)
+    banjo          = 42, -- F#3, Banjo
+    pling          = 42, -- F#3, Electric Piano
+    harp           = 42, -- F#3, Harp
 }
 
+---@type NoteblockInstrument[]
 local normalBias = {
     "harp",
     "bass",
@@ -45,29 +55,30 @@ local normalBias = {
     "cow_bell",
 }
 
+---@type { [NoteblockInstrument]: integer }
 local normalWeights = {}
 
 for i = 1, #normalBias do
     normalWeights[normalBias[i]] = #normalBias - i
 end
-
+---@type { [integer]: NoteblockInstrument[] }
 local instrumentBias = {
     -- Piano
-    [1]  = {"harp", "pling"},  -- Acoustic Grand Piano
-    [2]  = {"harp", "pling"},  -- Bright Acoustic Piano
-    [3]  = {"pling", "harp"},  -- Electric Grand Piano
-    [4]  = {"harp", "pling"},  -- Honky-tonk Piano
-    [5]  = {"harp", "pling"},  -- Electric Piano 1
-    [6]  = {"pling", "harp"},  -- Electric Piano 2
-    [7]  = {"harp"},           -- Harpsichord
-    [8]  = {"harp"},           -- Clavinet
+    [1] = {"harp", "pling"},  -- Acoustic Grand Piano
+    [2] = {"harp", "pling"},  -- Bright Acoustic Piano
+    [3] = {"pling", "harp"},  -- Electric Grand Piano
+    [4] = {"harp", "pling"},  -- Honky-tonk Piano
+    [5] = {"pling", "harp"},  -- Electric Piano 1
+    [6] = {"pling", "harp"},  -- Electric Piano 2
+    [7] = {"harp"},           -- Harpsichord
+    [8] = {"harp"},           -- Clavinet
 
     -- Chromatic Percussion
     [9]  = {"bell", "chime"},                                -- Celesta
     [10] = {"bell", "chime"},                                -- Glockenspiel
     [11] = {"bell", "chime"},                                -- Music Box
-    [12] = {"bell", "chime"},                                -- Vibraphone
-    [13] = {"xylophone", "bell"},                            -- Marimba
+    [12] = {"iron_xylophone", "xylophone", "bell", "chime"}, -- Vibraphone
+    [13] = {"xylophone", "iron_xylophone", "bell", "chime"}, -- Marimba
     [14] = {"xylophone", "iron_xylophone", "bell", "chime"}, -- Xylophone
     [15] = {"bell", "chime"},                                -- Tubular Bells
     [16] = {"pling", "bell"},                                -- Dulcimer
@@ -181,14 +192,14 @@ local instrumentBias = {
     [104] = {"chime", "pling"}, -- FX 8 (sci-fi)
 
     -- Ethnic
-    [105] = {"banjo", "harp", "pling"}, -- Sitar
-    [106] = {"banjo", "harp", "pling"}, -- Banjo
-    [107] = {"banjo", "harp", "pling"}, -- Shamisen
-    [108] = {"banjo", "harp", "pling"}, -- Koto
-    [109] = {"banjo", "harp", "pling"}, -- Kalimba
-    [110] = {"banjo", "harp", "pling"}, -- Bag pipe
-    [111] = {"banjo", "harp", "pling"}, -- Fiddle
-    [112] = {"banjo", "harp", "pling"}, -- Shanai
+    [105] = {"banjo", "didgeridoo", "harp", "pling"}, -- Sitar
+    [106] = {"banjo", "didgeridoo", "harp", "pling"}, -- Banjo
+    [107] = {"banjo", "didgeridoo", "harp", "pling"}, -- Shamisen
+    [108] = {"banjo", "didgeridoo", "harp", "pling"}, -- Koto
+    [109] = {"banjo", "didgeridoo", "harp", "pling"}, -- Kalimba
+    [110] = {"banjo", "didgeridoo", "harp", "pling"}, -- Bag pipe
+    [111] = {"banjo", "didgeridoo", "harp", "pling"}, -- Fiddle
+    [112] = {"banjo", "didgeridoo", "harp", "pling"}, -- Shanai
 
     -- Percussive
     [113] = {"bell", "xylophone", "iron_xylophone", "cow_bell"}, -- Tinkle Bell
@@ -201,26 +212,29 @@ local instrumentBias = {
 }
 
 local soundEffects = {
-    [120] = "minecraft:item.elytra.flying", -- Reverse Cymbal, TODO: Choose better sound
-    [121] = "minecraft:item.crossbow.loading_end", -- Guitar Fret Noise
-    [122] = "minecraft:entity.player.breath", -- Breath Noise
-    [123] = "minecraft:ambient.underwater.enter", -- Seashore
-    [124] = "minecraft:entity.parrot.ambient", -- Bird Tweet
-    [125] = "minecraft:block.bell.use", -- Telephone Ring
-    [126] = "minecraft:entity.phantom.fly", -- Helicopter
-    [127] = "minecraft:entity.player.levelup", -- Applause
+    [120] = "minecraft:item.elytra.flying",           -- Reverse Cymbal, TODO: Choose less harsh sound
+    [121] = "minecraft:item.crossbow.loading_end",    -- Guitar Fret Noise
+    [122] = "minecraft:entity.player.breath",         -- Breath Noise
+    [123] = "minecraft:block.water.ambient",          -- Seashore
+    [124] = "minecraft:entity.parrot.ambient",        -- Bird Tweet
+    [125] = "minecraft:block.bell.use",               -- Telephone Ring
+    [126] = "minecraft:entity.ender_dragon.flap",     -- Helicopter
+    [127] = "minecraft:entity.player.levelup",        -- Applause
     [128] = "minecraft:entity.firework_rocket.blast", -- Gunshot
 }
 
 local drumList = {
-    [35] = "basedrum",
-    [36] = "basedrum",
-    [38] = "snare",
-    [40] = "snare",
-    [42] = "hat",
-    [44] = "hat",
-    [46] = "hat"
+    [35] = "basedrum", -- Acoustic Bass Drum
+    [36] = "basedrum", -- Bass Drum 1
+    [38] = "snare",    -- Acoustic Snare
+    [39] = "snare",    -- Hand Clap
+    [40] = "snare",    -- Electric Snare
+    [42] = "hat",      -- Closed Hi-Hat
+    [44] = "hat",      -- Pedal Hi-Hat
+    [46] = "hat"       -- Open Hi-Hat
 }
+
+----------------------------------------------------------------------------------
 
 local channelInstruments = {}
 local channelVolumes = {}
@@ -259,9 +273,12 @@ device:listen(function (data)
     end
 
     if status == midi.NOTE_ON then
+        local speaker = peripheral.find("speaker")
+
+        if speaker == nil then return end
         local volume = (velocity/127) * channelVolumes[channel]
         local pitch = note
-        if SUPPORTS_PITCH_BENDING then pitch = pitch + channelPitches[channel] end
+        if settings.get("midi.noteblock.usePitchbend", false) then pitch = pitch + channelPitches[channel] end
 
         if channel == 10 then
             -- Drum channel, handle drums
