@@ -55,16 +55,17 @@ function midi.create(name, mode)
         mode = mode,
         isInput = (mode == "input"),
         isOutput = (mode == "output"),
-        ---@type fun(data: number[])[]
+        ---@type [ fun(data: number[]), function ][]
         listeners = {},
         lastListener = 1,
 
-        ---Sends valid MIDI messages to listeners
+        ---Listen to valid MIDI messages in the device
         ---@param self MIDIDevice
         ---@param func fun(data: number[])
+        ---@param onRemove? function
         ---@return integer
-        listen = function (self, func)
-            self.listeners[self.lastListener] = func
+        listen = function (self, func, onRemove)
+            self.listeners[self.lastListener] = {func, onRemove}
             self.lastListener = self.lastListener + 1
             return self.lastListener - 1
         end,
@@ -73,7 +74,26 @@ function midi.create(name, mode)
         ---@param self MIDIDevice
         ---@param id integer
         removeListener = function (self, id)
+            if self.listeners[id][2] then self.listeners[2]() end -- call the onRemove function if it is there
             self.listeners[id] = nil
+        end,
+
+        ---Remove this device from the device list, if this device is not on the list, it just removes the listeners
+        ---
+        ---Also removes all listeners
+        ---
+        ---@param self MIDIDevice
+        pop = function (self)
+            for key, _ in pairs(self.listeners) do
+                self:removeListener(key)
+            end
+
+            if self.id then
+                if midi.defaultInputID == self.id then midi.defaultInputID = nil end
+                if midi.defaultOutputID == self.id then midi.defaultOutputID = nil end
+                midi.devices[self.id] = nil
+                self.id = nil
+            end
         end,
 
         ---@private
@@ -94,10 +114,10 @@ function midi.create(name, mode)
                 if not self._status then return end
                 table.insert(self._buffer, byte)
                 if #self._buffer == midi.STATUS_SIZE[self._status] then
-                    for _, func in pairs(self.listeners) do
+                    for _, pair in pairs(self.listeners) do
                         local data = {table.unpack(self._buffer)}
                         table.insert(data, 1, self._fullStatus)
-                        func(data)
+                        pair[1](data)
                     end
 
                     self._buffer = {}
