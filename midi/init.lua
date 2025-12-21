@@ -74,7 +74,7 @@ function midi.create(name, mode)
         ---@param self MIDIDevice
         ---@param id integer
         removeListener = function (self, id)
-            if self.listeners[id][2] then self.listeners[2]() end -- call the onRemove function if it is there
+            if self.listeners[id] and self.listeners[id][2] then self.listeners[id][2]() end -- call the onRemove function if it is there
             self.listeners[id] = nil
         end,
 
@@ -230,3 +230,7 @@ function midi.toString(data)
 end
 
 require("midi.synth")
+
+if settings.get("midi.persistent", false) then
+    _G["midi"] = midi
+end
