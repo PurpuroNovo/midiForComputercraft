@@ -1,4 +1,4 @@
-if not midi then require("midi") end
+if not midi then require("/midi") end
 
 function showUsage()
     print("Usage: wsmidi input <url>")
@@ -85,7 +85,7 @@ if arg[1] == "input" then
                 elseif (event[1] == "websocket_message" and event[2] == server) then
                     local data = event[3]
                     device:send(data)
-                    midi.find("Noteblock MIDI Synth"):send(data) -- for debug
+                    --midi.find("Noteblock MIDI Synth"):send(data) -- for debug
                 end
             end
             pcall(function () ws.close() end)
@@ -105,6 +105,47 @@ if arg[1] == "input" then
     end
 elseif arg[1] == "listen" then
     listen(false)
+elseif arg[1] == "output" then
+    if daemon then
+        multishell.setTitle(multishell.getCurrent(), "daemon")
+        local ws = assert(http.websocket(server))
+        print("Listening to MIDI server " .. server)
+        print("This tab is handling the websocket MIDI output")
+        print("Close it if you wish to close the connection")
+        local device = midi.create("Websocket MIDI", "output")
+        device:listen(function (data)
+            local stringData = ""
+
+            for i = 1, #data do
+                stringData = stringData ..  string.char(data[i])
+            end
+
+            -- TODO: find a way to check if the websocket is closed so i don't need to do this
+            if not pcall(function () ws.send(stringData, true) end) then
+                device:pop()
+            end
+        end)
+        while device.id ~= nil do
+            local event = { os.pullEventRaw() }
+            if event[1] == "terminate" or (event[1] == "websocket_close" and event[2] == server)  or (event[1] == "websocket_failure" and event[2] == server) then
+                pcall(function () ws.close() end)
+                device:pop()
+                break
+            end
+        end
+
+        pcall(function () ws.close() end)
+        device:pop()
+    else
+        multishell.launch({
+            arg = { arg[1], arg[2] },
+            daemon = true,
+            http = http,
+            midi = midi,
+            os = os,
+            multishell = multishell
+        }, shell.getRunningProgram())
+    end
 else
-    print("ERROR: TODO")
+    showUsage()
 end
