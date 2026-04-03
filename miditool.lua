@@ -4,6 +4,7 @@ function showUsage()
     print("Usage: midi list")
     print("Usage: midi setoutput <id>")
     print("Usage: midi setinput <id>")
+    print("Usage: midi play <file> | midi play <output id> <file>")
 end
 
 local persistent = settings.get("midi.persistent", false)
@@ -51,6 +52,16 @@ elseif arg[1] == "setoutput" or arg[1] == "setinput" then
         else
             print("(No device found)")
         end
+    end
+elseif arg[1] == "play" then
+    if type(tonumber(arg[2])) == "number" then
+        if type(arg[3]) ~= "string" then return showUsage() end
+        local device = midi.devices[tonumber(arg[2])]
+        midisequencer.fromFile(shell.resolve(arg[3]), device):play()
+    elseif type(arg[2]) == "string" then
+        midisequencer.fromFile(shell.resolve(arg[2])):play()
+    else
+        showUsage()
     end
 else
     showUsage()

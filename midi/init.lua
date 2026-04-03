@@ -1,9 +1,13 @@
+---Handles MIDI devices and protocol
+---
+---This does not handle Standard MIDI Files, use midifile for that 
+---@see midifile
 midi = {}
 ---@type { [integer]: MIDIDevice }
 midi.devices = {}
 local _availableId = 1
 
-require("midi.constants")
+require("/midi/constants")
 
 ---@type number|nil
 midi.defaultInputID = nil
@@ -89,8 +93,29 @@ function midi.create(name, mode)
             end
 
             if self.id then
-                if midi.defaultInputID == self.id then midi.defaultInputID = nil end
-                if midi.defaultOutputID == self.id then midi.defaultOutputID = nil end
+                if midi.defaultInputID == self.id then
+                    midi.defaultInputID = nil
+                    for id, device in pairs(midi.devices) do
+                        if device.isInput then
+                            midi.defaultInputID = id
+                            break
+                        end
+                    end
+                end
+                if midi.defaultOutputID == self.id then
+                    local noteblockSynth = midi.find("Noteblock MIDI Synth", "output")
+                    if noteblockSynth then -- Prioritize having the noteblock synth as default output
+                        midi.defaultOutputID = noteblockSynth.id
+                    else
+                        midi.defaultOutputID = nil
+                        for id, device in pairs(midi.devices) do
+                            if device.isInput then
+                                midi.defaultInputID = id
+                                break
+                            end
+                        end
+                    end
+                end
                 midi.devices[self.id] = nil
                 self.id = nil
             end
@@ -229,8 +254,12 @@ function midi.toString(data)
     return "Unknown Data"
 end
 
-require("midi.synth")
+require("/midi/synth")
+require("/midi/midifile")
+require("/midi/midisequencer")
 
 if settings.get("midi.persistent", false) then
     _G["midi"] = midi
+    _G["midifile"] = midifile
+    _G["midisequencer"] = midisequencer
 end
