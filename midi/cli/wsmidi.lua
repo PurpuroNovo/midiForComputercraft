@@ -17,8 +17,8 @@ end
 local persistent = settings.get("midi.persistent", false)
 
 if not persistent and arg[1] == "output" then
-    print("ERROR: Cannot create output devices without midi.persistent")
-    print("If you want to create output devices, \"set midi.persistent true\"")
+    printError("ERROR: Cannot create output devices without midi.persistent")
+    printError("If you want to create output devices, run \"set midi.persistent true\"")
     return
 end
 
