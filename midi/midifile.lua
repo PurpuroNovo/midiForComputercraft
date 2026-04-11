@@ -40,11 +40,15 @@ midifile.META_NAMES = {
     [midifile.SEQUENCER_SPECIFIC] = "Sequencer Specific"
 }
 
-function midifile.read(path)
+--------------------------------------------------------------------
+
+---Reads from a file like object
+---@param file {read: fun(size?: integer): string|integer|nil, close: fun(): any} An object with a .read and .close function
+---@return MIDIFile
+---@see midifile.read
+function midifile.parse(file)
     ---@class MIDIFile
     local midiFile = {}
-    local file= fs.open(path, "rb")
-    assert(file ~= nil, "File not found")
     assert(file.read(4) == "MThd", "Not a valid MIDI file")
 
     ---@param size integer
@@ -52,7 +56,7 @@ function midifile.read(path)
     local function readInt(size)
         local result = 0
         for i = 0, size - 1 do
-            local byte = file.read(1):byte(1)
+            local byte = file.read()
             result = result * 256 + byte
         end
         return result
@@ -82,7 +86,7 @@ function midifile.read(path)
         local function readVLQ()
             local value = 0
             while true do
-                local byte = file.read(1):byte(1)
+                local byte = file.read()
                 index = index + 1
                 value = bit.bor(value * 2^7, bit.band(byte, 0x7F))
                 if bit.band(byte, 0x80) == 0 then break end
@@ -99,20 +103,20 @@ function midifile.read(path)
             event.delta = deltaTime
             ---@type number[]
             event.data = {}
-            local messageByte = file.read(1):byte(1)
+            local messageByte = file.read()
             index = index + 1
 
             if messageByte == 0xFF then -- Meta event
                 status = nil
                 event.type = "meta"
-                event.metaType = file.read(1):byte(1)
+                event.metaType = file.read()
                 index = index + 1
 
                 local length = readVLQ()
                 event.length = length
 
                 for _ = 1, length do
-                    table.insert(event.data, file.read(1):byte(1))
+                    table.insert(event.data, file.read())
                     index = index + 1
                 end
             elseif messageByte == 0xF0 or messageByte == 0xF7 then -- SysEx 
@@ -122,7 +126,7 @@ function midifile.read(path)
                 event.length = length
 
                 for _ = 1, length do
-                    table.insert(event.data, file.read(1):byte(1))
+                    table.insert(event.data, file.read())
                     index = index + 1
                 end
             else
@@ -146,7 +150,7 @@ function midifile.read(path)
                 event.expectedFullStatus = status + channel
 
                 for _ = 1, length do
-                    table.insert(event.data, file.read(1):byte(1))
+                    table.insert(event.data, file.read())
                     index = index + 1
                 end
             end
@@ -160,4 +164,47 @@ function midifile.read(path)
     file.close()
 
     return midiFile
+end
+
+local function zlibWrapper(file)
+    local wrapper = {}
+    wrapper.content = require("/midi/LibDeflate"):DecompressZlib(file.readAll())
+    file.close()
+
+    wrapper.closed = false
+    wrapper.index = 1
+    function wrapper.read(size)
+        if wrapper.closed then error("attempt to use closed file") end
+        if wrapper.index > #wrapper.content then return nil end
+        if size then
+            local chunk = wrapper.content:sub(wrapper.index, math.min(wrapper.index + size - 1, #wrapper.content))
+            wrapper.index = wrapper.index + #chunk
+            return chunk
+        else
+            local byte = wrapper.content:byte(wrapper.index)
+            wrapper.index = wrapper.index + 1
+            return byte
+        end
+    end
+
+    function wrapper.close()
+        wrapper.closed = true
+        wrapper.index = nil
+        wrapper.content = nil
+    end
+
+    return wrapper
+end
+
+---Read a MIDI file from a specific file path
+---@param path string Absolute file path
+---@return MIDIFile
+function midifile.read(path)
+    local file = fs.open(path, "rb")
+    assert(file ~= nil, "File not found")
+    if fs.exists("/midi/LibDeflate.lua") and path:match("%.zlib$") then
+        return midifile.parse(zlibWrapper(file))
+    else
+        return midifile.parse(file)
+    end
 end

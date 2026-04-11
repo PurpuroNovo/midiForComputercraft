@@ -36,6 +36,11 @@ function download(url, path)
     file.close()
 end
 
+local installDeflate = false
+write("Do you want to install LibDeflate to support reading *.mid.zlib files? (optional) (yes/no) : ")
+local input = read()
+installDeflate = (input:lower() == "yes") or (input:lower() == "y")
+
 local REPO = "https://raw.githubusercontent.com/PurpuroNovo/midiForComputercraft/refs/heads/main"
 function downloadRepo(path)
     download(REPO .. path, path)
@@ -47,6 +52,9 @@ downloadRepo("/midi/constants.lua")
 downloadRepo("/midi/synth.lua")
 downloadRepo("/midi/midifile.lua")
 downloadRepo("/midi/midisequencer.lua")
+if installDeflate then
+    download("https://gist.githubusercontent.com/MineRobber9000/bdc3ce6c73b32cb1e4a56817eb392222/raw/e28e657d4404145be3c506e9ae5a77da025be3ce/LibDeflate_min.lua", "/midi/LibDeflate.lua")
+end
 
 fs.makeDir("/midi/cli")
 downloadRepo("/midi/cli/miditool.lua")

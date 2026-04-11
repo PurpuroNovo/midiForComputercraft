@@ -17,6 +17,7 @@ wget run https://raw.githubusercontent.com/PurpuroNovo/midiForComputercraft/refs
 # For users
 
 To play a midi file, use `midi play <file>`
+
 You don't have to use any outside program to play, the MIDI file is read inside Computercraft
 
 ## How to connect real MIDI devices (Keyboards/Synths)
@@ -32,3 +33,7 @@ NOTE: This only works with advanced computers
 # For developers
 
 Coming soon
+
+# Credits
+
+* [LibDeflate](https://gist.github.com/MineRobber9000/bdc3ce6c73b32cb1e4a56817eb392222) - Optionally used for reading compressed .mid files
