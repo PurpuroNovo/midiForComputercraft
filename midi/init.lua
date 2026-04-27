@@ -22,12 +22,12 @@ function midi.find(name, mode)
     for id, device in pairs(midi.devices) do
         if mode ~= nil then
             if device.mode == mode then
-                if device.name == name then
+                if device.name == name and device:isAlive() then
                     return device
                 end
             end
         else
-            if device.name == name then
+            if device.name == name and device:isAlive() then
                 return device
             end
         end
@@ -45,9 +45,10 @@ end
 ---Defaults to an output device if mode is not specified
 ---@param name string|nil
 ---@param mode? MIDIDevice.mode
-function midi.create(name, mode)
+---@param immortal? boolean If true, it wont check if the thread that created it or any thread that listens to it is alive
+function midi.create(name, mode, immortal)
     if mode == nil then mode = "output" end
-    assert(mode == "input" or mode == "output", "mode must be input or output")
+    assert(mode == "input" or mode == "output", "mode must be \"input\" or \"output\"")
 
     ---@class MIDIDevice
     local device = {
@@ -59,9 +60,17 @@ function midi.create(name, mode)
         mode = mode,
         isInput = (mode == "input"),
         isOutput = (mode == "output"),
-        ---@type [ fun(data: number[]), function ][]
+        ---@type [ fun(data: number[]), function|nil, thread ][]
         listeners = {},
         lastListener = 1,
+        ---@private
+        _co = coroutine.running(),
+
+        ---@param self MIDIDevice
+        isAlive = function (self)
+            if immortal then return true end
+            return coroutine.status(self._co) ~= "dead"
+        end,
 
         ---Listen to valid MIDI messages in the device
         ---@param self MIDIDevice
@@ -69,7 +78,7 @@ function midi.create(name, mode)
         ---@param onRemove? function
         ---@return integer
         listen = function (self, func, onRemove)
-            self.listeners[self.lastListener] = {func, onRemove}
+            self.listeners[self.lastListener] = {func, onRemove, immortal and nil or coroutine.running()}
             self.lastListener = self.lastListener + 1
             return self.lastListener - 1
         end,
@@ -78,7 +87,7 @@ function midi.create(name, mode)
         ---@param self MIDIDevice
         ---@param id integer
         removeListener = function (self, id)
-            if self.listeners[id] and self.listeners[id][2] then self.listeners[id][2]() end -- call the onRemove function if it is there
+            if self.listeners[id] and self.listeners[id][2] and (self.listeners[3] and coroutine.status(self.listeners[id][3]) ~= "dead" or true) then self.listeners[id][2]() end -- call the onRemove function if it is there, and if its thread is still running
             self.listeners[id] = nil
         end,
 
@@ -109,8 +118,8 @@ function midi.create(name, mode)
                     else
                         midi.defaultOutputID = nil
                         for id, device in pairs(midi.devices) do
-                            if device.isInput then
-                                midi.defaultInputID = id
+                            if device.isOutput then
+                                midi.defaultOutputID = id
                                 break
                             end
                         end
@@ -128,7 +137,10 @@ function midi.create(name, mode)
         ---@private
         _buffer = {},
         ---@private
+        ---@param self MIDIDevice
         handleByte = function (self, byte)
+            if not self:isAlive() then return self:pop() end
+
             if byte >= 0x80 then
                 -- Status byte received
                 self._fullStatus = byte
@@ -140,9 +152,11 @@ function midi.create(name, mode)
                 table.insert(self._buffer, byte)
                 if #self._buffer == midi.STATUS_SIZE[self._status] then
                     for _, pair in pairs(self.listeners) do
-                        local data = {table.unpack(self._buffer)}
-                        table.insert(data, 1, self._fullStatus)
-                        pair[1](data)
+                        if (pair[3] and coroutine.status(pair[3]) ~= "dead" or true) then
+                            local data = {table.unpack(self._buffer)}
+                            table.insert(data, 1, self._fullStatus)
+                            pair[1](data)
+                        end
                     end
 
                     self._buffer = {}

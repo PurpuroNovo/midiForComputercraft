@@ -1,5 +1,5 @@
 if midi.find("Noteblock MIDI Synth", "output") then return end -- Don't make a new instance if one already exists
-local device = midi.create("Noteblock MIDI Synth", "output")
+local device = midi.create("Noteblock MIDI Synth", "output", true)
 
 -- The best of both worlds: Having instruments and having range
 -- Since noteblocks can't reach all notes due to computercraft limiting us, I can choose instruments in other ranges
@@ -249,8 +249,6 @@ end
 device:listen(function (data)
     local status = bit.band(data[1], 0xF0)
     local channel = bit.band(data[1], 0x0F) + 1
-    local note = data[2]
-    local velocity = data[3]
 
     if status == midi.CONTROL_CHANGE then
         local control = data[2]
@@ -273,6 +271,8 @@ device:listen(function (data)
     end
 
     if status == midi.NOTE_ON then
+        local note = data[2]
+        local velocity = data[3]
         local speaker = peripheral.find("speaker")
 
         if speaker == nil then return end
